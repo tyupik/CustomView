@@ -1,5 +1,7 @@
 package ru.netology.customview
 
+import android.animation.Animator
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -11,6 +13,7 @@ import androidx.core.content.withStyledAttributes
 import ru.netology.customview.utils.AndroidUtils
 import kotlin.math.min
 import kotlin.random.Random
+
 
 class StatsView @JvmOverloads constructor(
     context: Context,
@@ -35,17 +38,38 @@ class StatsView @JvmOverloads constructor(
 
     private var oval = RectF(0F, 0F, 0F, 0F)
 
+
     var data: List<Float> = emptyList()
         set(value) {
             field = value
-            invalidate()
+            update()
         }
 
-//    private val dataCalc = getValues(data)
-//    private val dataCalc = data
+    private fun update() {
+        animator?.let {
+            it.removeAllListeners()
+            it.cancel()
+        }
+        progress = 0F
+
+        animator = ValueAnimator.ofFloat(0F, 1F).apply {
+            addUpdateListener {
+                progress = it.animatedValue as Float
+                invalidate()
+            }
+
+            duration = 5_000
+//            interpolator = BounceInterpolator()
+            start()
+        }
+    }
 
 
     private var colors = emptyList<Int>()
+
+    private var progress = 0F
+    private var animator: Animator? = null
+    private val initialAngle = -90F
 
     init {
         context.withStyledAttributes(attrs, R.styleable.StatsView) {
@@ -81,16 +105,32 @@ class StatsView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         val dataCalc = getValues(data)
 
-        if (dataCalc.isEmpty()) {
+        if (dataCalc.isEmpty() || progress == 0F) {
             return
         }
-        var startAngle = -90F
+        var startAngle = initialAngle
+        val maxAngle = 360F * progress
         dataCalc.forEachIndexed() { index, item ->
-            val angle = item * 360F
-            paint.color = colors.getOrElse(index) { getRandomColor() }
-            canvas.drawArc(oval, startAngle, angle, false, paint)
+            val angle = 360F * item
+            if (startAngle - initialAngle + angle > maxAngle) {
+                drawData(
+                    index = index,
+                    canvas = canvas,
+                    startFrom = startAngle,
+                    // Корректировка
+                    sweepAngle = maxAngle - startAngle + initialAngle
+                )
+                return
+            }
+            drawData(
+                index = index,
+                canvas = canvas,
+                startFrom = startAngle,
+                sweepAngle = angle
+            )
             startAngle += angle
         }
+
 
         if (dataCalc[0] > 0) {
             paint.color = colors.getOrElse(0) { getRandomColor() }
@@ -104,6 +144,18 @@ class StatsView @JvmOverloads constructor(
             center.y + textPaint.textSize / 4,
             textPaint
         )
+    }
+
+    private fun drawData(
+        index: Int,
+        canvas: Canvas,
+        startFrom: Float,
+        sweepAngle: Float,
+    ) {
+        paint.color = colors.getOrElse(index) { getRandomColor() }
+        canvas.drawArc(oval, startFrom, sweepAngle, false, paint)
+        paint.color = colors[0]
+        canvas.drawArc(oval, initialAngle, 1F, false, paint)
     }
 
     private fun getRandomColor() = Random.nextInt(0xFF000000.toInt(), 0xFFFFFFFF.toInt())
@@ -124,4 +176,3 @@ class StatsView @JvmOverloads constructor(
         return dataFloat.toList()
     }
 }
-
